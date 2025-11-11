@@ -1,0 +1,13 @@
+<svg width="300" height="300" xmlns="http://www.w3.org/2000/svg">
+  <rect width="300" height="300" fill="#FFB6C1"/>
+  <text x="150" y="140" font-family="Arial" font-size="24" fill="white" text-anchor="middle">Cosmetics</text>
+  <circle cx="150" cy="180" r="30" fill="#FF69B4"/>
+  <rect x="75" y="200" width="150" height="40" rx="20" fill="#FF1493"/>
+</svg>
+
+
+
+
+
+
+

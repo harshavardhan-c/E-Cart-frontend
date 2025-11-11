@@ -1,0 +1,13 @@
+<svg width="300" height="300" xmlns="http://www.w3.org/2000/svg">
+  <rect width="300" height="300" fill="#8B4513"/>
+  <text x="150" y="140" font-family="Arial" font-size="24" fill="white" text-anchor="middle">Chocolate</text>
+  <rect x="75" y="160" width="150" height="20" rx="5" fill="#D2691E"/>
+  <rect x="75" y="190" width="150" height="20" rx="5" fill="#CD853F"/>
+</svg>
+
+
+
+
+
+
+

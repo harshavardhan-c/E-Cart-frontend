@@ -36,7 +36,7 @@ export default function ContactPage() {
 
   return (
     <div className="min-h-screen bg-white">
-      <Navbar cartCount={0} onCartClick={() => {}} />
+      <Navbar cartCount={0} onCartClickAction={() => {}} />
 
       <main className="max-w-6xl mx-auto px-4 py-12">
         <div className="text-center mb-12">

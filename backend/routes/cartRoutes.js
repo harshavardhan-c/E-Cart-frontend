@@ -1,5 +1,5 @@
 import express from 'express';
-import { authenticateToken } from '../middleware/authMiddleware.js';
+import { authenticateToken, optionalAuth } from '../middleware/authMiddleware.js';
 import {
   getCart,
   addToCart,
@@ -11,18 +11,20 @@ import {
 
 const router = express.Router();
 
-// All cart routes require authentication
-router.use(authenticateToken);
+// GET routes support optional auth (for guest users)
+router.get('/count', optionalAuth, getCartCount);
+router.get('/', optionalAuth, getCart);
 
-// Routes
-router.get('/', getCart);
-router.post('/', addToCart);
-router.put('/:cartId', updateCartItem);
-router.delete('/:cartId', removeFromCart);
-router.delete('/', clearCart);
-router.get('/count', getCartCount);
+// Modification routes require authentication
+router.post('/', authenticateToken, addToCart);
+router.put('/:cartId', authenticateToken, updateCartItem);
+router.delete('/:cartId', authenticateToken, removeFromCart);
+router.delete('/', authenticateToken, clearCart);
 
 export default router;
+
+
+
 
 
 

@@ -144,3 +144,7 @@ The OTP emails are sent with a beautiful HTML template featuring:
 
 
 
+
+
+
+

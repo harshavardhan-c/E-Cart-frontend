@@ -28,7 +28,7 @@ export default function SearchPage() {
 
   return (
     <main className="min-h-screen bg-white">
-      <Navbar onCartClick={() => setIsCartOpen(true)} cartCount={cartCount} />
+      <Navbar onCartClickAction={() => setIsCartOpen(true)} cartCount={cartCount} />
 
       {/* Header */}
       <div className="bg-gradient-to-r from-orange-50 to-orange-100 py-8">
@@ -79,7 +79,7 @@ export default function SearchPage() {
       </div>
 
       <Footer />
-      <CartDrawer isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} />
+      <CartDrawer isOpen={isCartOpen} onCloseAction={() => setIsCartOpen(false)} />
     </main>
   )
 }

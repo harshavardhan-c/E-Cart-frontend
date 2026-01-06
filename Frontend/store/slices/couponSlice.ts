@@ -28,10 +28,16 @@ export const fetchActiveCoupons = createAsyncThunk(
   'coupons/fetchActive',
   async ({ page = 1, limit = 20 }: { page?: number; limit?: number } = {}, { rejectWithValue }) => {
     try {
-      const response = await couponsApi.getActiveCoupons(page, limit)
-      return response.data.coupons
+      const response = await couponsApi.getActiveCoupons()
+      return response.data.coupons || []
     } catch (error: any) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to fetch active coupons')
+      // Handle authentication errors gracefully
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        console.warn('Not authenticated for coupons, returning empty array')
+        return []
+      }
+      console.warn('Failed to fetch active coupons:', error.message)
+      return []
     }
   }
 )
@@ -47,6 +53,15 @@ export const validateCoupon = createAsyncThunk(
         message: response.message
       }
     } catch (error: any) {
+      // Handle authentication errors gracefully
+      if (error.response?.status === 401 || error.response?.status === 403) {
+        console.warn('Not authenticated for coupon validation')
+        return {
+          valid: false,
+          coupon: null,
+          message: 'Please log in to use coupons'
+        }
+      }
       return {
         valid: false,
         coupon: null,

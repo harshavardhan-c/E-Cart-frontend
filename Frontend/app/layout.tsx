@@ -16,7 +16,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" suppressHydrationWarning className="h-full">
       <head>
         <meta name="theme-color" content="#ff6b00" />
         <meta name="mobile-web-app-capable" content="yes" />
@@ -26,9 +26,14 @@ export default function RootLayout({
         <link rel="icon" href="/favicon.ico" />
         <link rel="apple-touch-icon" href="/icon-192.png" />
       </head>
-      <body className={`font-sans antialiased`}>
+      <body className={`font-sans antialiased bg-background text-foreground h-full`}>
         <Provider store={store}>
-          <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          <ThemeProvider 
+            attribute="class" 
+            defaultTheme="light" 
+            enableSystem={false}
+            disableTransitionOnChange={false}
+          >
             <AuthProvider>
               <SplashScreen />
               {children}
@@ -40,9 +45,25 @@ export default function RootLayout({
         <script
           dangerouslySetInnerHTML={{
             __html: `
+              // Service Worker Registration
               if ('serviceWorker' in navigator) {
                 navigator.serviceWorker.register('/service-worker.js').catch(() => {});
               }
+              
+              // Suppress browser extension errors
+              window.addEventListener('error', function(e) {
+                if (e.message && e.message.includes('message channel closed')) {
+                  e.preventDefault();
+                  return false;
+                }
+              });
+              
+              window.addEventListener('unhandledrejection', function(e) {
+                if (e.reason && e.reason.message && e.reason.message.includes('message channel closed')) {
+                  e.preventDefault();
+                  return false;
+                }
+              });
             `,
           }}
         />

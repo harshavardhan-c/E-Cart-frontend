@@ -16,16 +16,18 @@ export function LazyImage({ src, alt, width, height, className }: LazyImageProps
   const [imageSrc, setImageSrc] = useState<string | null>(null)
 
   useEffect(() => {
-    const img = new Image()
-    img.onload = () => {
-      setImageSrc(src)
-      setIsLoaded(true)
+    if (typeof window !== 'undefined') {
+      const img = new window.Image()
+      img.onload = () => {
+        setImageSrc(src)
+        setIsLoaded(true)
+      }
+      img.onerror = () => {
+        setImageSrc(src)
+        setIsLoaded(true)
+      }
+      img.src = src
     }
-    img.onerror = () => {
-      setImageSrc(src)
-      setIsLoaded(true)
-    }
-    img.src = src
   }, [src])
 
   return (

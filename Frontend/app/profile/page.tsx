@@ -48,7 +48,7 @@ export default function ProfilePage() {
   return (
     <ProtectedRoute>
       <div className="min-h-screen bg-white">
-        <Navbar cartCount={0} onCartClick={() => {}} />
+        <Navbar cartCount={0} onCartClickAction={() => {}} />
 
         <main className="max-w-4xl mx-auto px-4 py-8">
           <div className="grid md:grid-cols-3 gap-6">

@@ -54,9 +54,9 @@ export interface CreateCouponRequest {
 
 // Coupon API functions
 export const couponsApi = {
-  // Get active coupons - matches backend route GET /api/coupons
+  // Get active coupons - matches backend route GET /api/coupons/active
   getActiveCoupons: async (): Promise<CouponsResponse> => {
-    const response = await apiClient.get('/coupons');
+    const response = await apiClient.get('/coupons/active');
     return response.data;
   },
 

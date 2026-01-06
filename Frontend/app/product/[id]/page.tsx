@@ -26,21 +26,20 @@ export default function ProductDetailPage() {
   const { addToCart, cartCount } = useCart()
   const { wishlist, toggleWishlist } = useWishlist()
 
-  const isWishlisted = wishlist.some((item) => item.id === productId)
+  const isWishlisted = wishlist.some((item: any) => item.id === productId)
 
   useEffect(() => {
     const fetchProduct = async () => {
       try {
         setLoading(true)
-        // Try to get product from API - need category
-        // For now, fetch by searching products or use a default category
-        const response = await productsApi.searchProducts(productId)
+        // First try to get all products and find the one with matching ID
+        const allProductsResponse = await productsApi.getAllProducts()
         
-        if (response.data.products && response.data.products.length > 0) {
-          const foundProduct = response.data.products.find((p: any) => p.id === productId)
+        if (allProductsResponse.data.products && allProductsResponse.data.products.length > 0) {
+          const foundProduct = allProductsResponse.data.products.find((p: any) => p.id === productId)
           if (foundProduct) {
             setProduct(foundProduct)
-            // Fetch related products
+            // Fetch related products from the same category
             if (foundProduct.category) {
               const relatedResponse = await productsApi.getProductsByCategory(foundProduct.category)
               const related = relatedResponse.data.products
@@ -48,6 +47,9 @@ export default function ProductDetailPage() {
                 .slice(0, 4)
               setRelatedProducts(related)
             }
+          } else {
+            // Product not found
+            setProduct(null)
           }
         }
       } catch (error) {
@@ -64,10 +66,12 @@ export default function ProductDetailPage() {
   }, [productId, router])
 
   const handleAddToCart = () => {
-    for (let i = 0; i < quantity; i++) {
-      addToCart(product)
+    if (product) {
+      for (let i = 0; i < quantity; i++) {
+        addToCart(product)
+      }
+      setIsCartOpen(true)
     }
-    setIsCartOpen(true)
   }
 
   if (loading) {
@@ -132,7 +136,7 @@ export default function ProductDetailPage() {
                 </div>
                 <button
                   onClick={() => toggleWishlist(product)}
-                  className="bg-white rounded-full p-3 shadow-md hover:bg-gray-100 transition-colors"
+                  className="bg-white rounded-full p-3 shadow-md hover:bg-gray-100 transition-colors focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
                 >
                   <Heart className={`w-6 h-6 ${isWishlisted ? "fill-red-500 text-red-500" : "text-gray-600"}`} />
                 </button>
@@ -262,8 +266,8 @@ export default function ProductDetailPage() {
                   <p className="text-gray-900">₹{product.price}</p>
                 </div>
                 <div>
-                  <p className="text-gray-600 font-semibold">Rating</p>
-                  <p className="text-gray-900">{product.rating} / 5</p>
+                  <p className="text-gray-600 font-semibold">Stock</p>
+                  <p className="text-gray-900">{product.stock} units</p>
                 </div>
                 <div>
                   <p className="text-gray-600 font-semibold">Availability</p>
@@ -314,7 +318,7 @@ export default function ProductDetailPage() {
       )}
 
       <Footer />
-      <CartDrawer isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} />
+      <CartDrawer isOpen={isCartOpen} onCloseAction={() => setIsCartOpen(false)} />
     </main>
   )
 }

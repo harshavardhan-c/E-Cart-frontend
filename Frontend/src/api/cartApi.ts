@@ -4,8 +4,8 @@ export interface CartItem {
   id: string;
   product_id: string;
   quantity: number;
-  added_at: string;
-  products: any;
+  added_at?: string;
+  products?: any;
 }
 
 export interface CartResponse {
@@ -75,29 +75,26 @@ export const cartApi = {
    */
   getCart: async (): Promise<CartResponse> => {
     try {
-      // If not authenticated, use guest cart
+      // If not authenticated, use guest cart immediately without API calls
       const isAuth = await cartApi.isAuthenticated()
+      
       if (!isAuth) {
         const items = cartApi.readGuest()
         const total = items.reduce((sum: number, it: any) => sum + (it.products?.price || 0) * (it.quantity || 1), 0)
-        return { status: 'success', message: 'Cart retrieved', data: { items: items as any, total, itemCount: items.length } }
+        const itemCount = items.reduce((n: number, it: any) => n + (it.quantity || 1), 0)
+        return { status: 'success', message: 'Guest cart retrieved', data: { items: items as any, total, itemCount } }
       }
 
       // Authenticated path via backend API
       const res = await apiClient.get('/cart')
       const { data } = res.data
-      // Ensure guest cart does not resurrect old items once user is authenticated
-      try { cartApi.writeGuest([] as any) } catch {}
       return { status: 'success', message: 'Cart retrieved', data }
     } catch (error: any) {
-      if (cartApi._isNetworkError(error)) {
-        // Backend likely offline; fall back to guest cart silently
-        const items = cartApi.readGuest()
-        const total = items.reduce((sum: number, it: any) => sum + (it.products?.price || 0) * (it.quantity || 1), 0)
-        return { status: 'success', message: 'Cart retrieved (fallback)', data: { items: items as any, total, itemCount: items.length } }
-      }
-      console.error('Error fetching cart:', error)
-      throw error
+      // Always fall back to guest cart on any error
+      const items = cartApi.readGuest()
+      const total = items.reduce((sum: number, it: any) => sum + (it.products?.price || 0) * (it.quantity || 1), 0)
+      const itemCount = items.reduce((n: number, it: any) => n + (it.quantity || 1), 0)
+      return { status: 'success', message: 'Guest cart (fallback)', data: { items: items as any, total, itemCount } }
     }
   },
 
@@ -114,7 +111,13 @@ export const cartApi = {
       if (existing) {
         existing.quantity = (existing.quantity || 1) + quantity
       } else {
-        items.push({ id: productId, product_id: productId, quantity })
+        items.push({ 
+          id: productId, 
+          product_id: productId, 
+          quantity,
+          added_at: new Date().toISOString(),
+          products: null
+        })
       }
       cartApi.writeGuest(items)
       return { data: { ok: true } }

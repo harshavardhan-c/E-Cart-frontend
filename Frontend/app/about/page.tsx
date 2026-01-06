@@ -8,7 +8,7 @@ import { Award, Users, Truck, Heart } from "lucide-react"
 export default function AboutPage() {
   return (
     <div className="min-h-screen bg-white">
-      <Navbar cartCount={0} onCartClick={() => {}} />
+      <Navbar cartCount={0} onCartClickAction={() => {}} />
 
       <main className="max-w-6xl mx-auto px-4 py-12">
         {/* Hero Section */}

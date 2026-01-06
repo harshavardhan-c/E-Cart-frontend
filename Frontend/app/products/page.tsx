@@ -7,30 +7,73 @@ import Footer from "@/components/footer"
 import ProductCard from "@/components/product-card"
 import CartDrawer from "@/components/cart-drawer"
 import { useCart } from "@/hooks/use-cart"
-import { getProducts } from "@/lib/dummy-data"
+import { productsApi, type Product } from "@/src/api/productsApi"
+import { useToast } from "@/hooks/use-toast"
 
 export default function ProductsPage() {
   const [isCartOpen, setIsCartOpen] = useState(false)
   const { cartCount } = useCart()
-  const [products, setProducts] = useState<any[]>([])
-  const [filteredProducts, setFilteredProducts] = useState<any[]>([])
+  const [products, setProducts] = useState<Product[]>([])
+  const [filteredProducts, setFilteredProducts] = useState<Product[]>([])
   const [selectedCategory, setSelectedCategory] = useState("all")
   const [sortBy, setSortBy] = useState("popular")
   const [priceRange, setPriceRange] = useState([0, 2000])
+  const [loading, setLoading] = useState(true)
+  const { toast } = useToast()
 
   const categories = [
     { id: "all", name: "All Products" },
     { id: "groceries", name: "Groceries" },
-    { id: "kitchen", name: "Kitchen" },
-    { id: "household", name: "Household" },
-    { id: "steel", name: "Steel Items" },
     { id: "snacks", name: "Snacks" },
-    { id: "dinnersets", name: "Dinner Sets" },
+    { id: "chocolates", name: "Chocolates" },
+    { id: "utensils", name: "Utensils" },
+    { id: "household", name: "Household" },
+    { id: "cosmetics", name: "Cosmetics" },
+    { id: "dry_fruits", name: "Dry Fruits" },
+    { id: "plastic_items", name: "Plastic Items" },
+    { id: "appliances", name: "Appliances" },
   ]
 
+  // Load products from API
   useEffect(() => {
-    const allProducts = getProducts()
-    setProducts(allProducts)
+    const loadProducts = async () => {
+      try {
+        setLoading(true)
+        const response = await productsApi.getAllProducts(1, 100)
+        if (response?.data?.products) {
+          setProducts(response.data.products)
+        } else {
+          // Fallback: try search API
+          try {
+            const searchResponse = await productsApi.searchProducts("")
+            if (searchResponse?.data?.products) {
+              setProducts(searchResponse.data.products)
+            }
+          } catch (searchError) {
+            console.warn('Search API also failed:', searchError)
+            // Set empty products array to stop loading state
+            setProducts([])
+          }
+        }
+      } catch (error: any) {
+        console.error('Error loading products:', error)
+        // Don't show error toast for network issues, just log them
+        if (error.response?.status >= 500 || error.code === 'ECONNABORTED') {
+          console.warn('Server error or timeout, products will be empty')
+        } else {
+          toast({
+            title: "Error loading products",
+            description: "Failed to load products. Please try again.",
+            variant: "destructive"
+          })
+        }
+        setProducts([])
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadProducts()
   }, [])
 
   useEffect(() => {
@@ -49,8 +92,6 @@ export default function ProductsPage() {
       filtered.sort((a, b) => a.price - b.price)
     } else if (sortBy === "price-high") {
       filtered.sort((a, b) => b.price - a.price)
-    } else if (sortBy === "rating") {
-      filtered.sort((a, b) => b.rating - a.rating)
     } else if (sortBy === "newest") {
       filtered.reverse()
     }
@@ -137,7 +178,6 @@ export default function ProductsPage() {
                   <option value="newest">Newest</option>
                   <option value="price-low">Price: Low to High</option>
                   <option value="price-high">Price: High to Low</option>
-                  <option value="rating">Highest Rated</option>
                 </select>
               </div>
             </div>
@@ -151,7 +191,13 @@ export default function ProductsPage() {
               </p>
             </div>
 
-            {filteredProducts.length > 0 ? (
+            {loading ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {[...Array(6)].map((_, index) => (
+                  <div key={index} className="bg-gray-200 rounded-lg h-80 animate-pulse"></div>
+                ))}
+              </div>
+            ) : filteredProducts.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredProducts.map((product, index) => (
                   <motion.div
@@ -166,7 +212,9 @@ export default function ProductsPage() {
               </div>
             ) : (
               <div className="text-center py-12">
-                <p className="text-gray-600 text-lg">No products found matching your filters.</p>
+                <p className="text-gray-600 text-lg">
+                  {loading ? "Loading products..." : "No products found matching your filters."}
+                </p>
               </div>
             )}
           </div>
@@ -174,7 +222,7 @@ export default function ProductsPage() {
       </div>
 
       <Footer />
-      <CartDrawer isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} />
+      <CartDrawer isOpen={isCartOpen} onCloseAction={() => setIsCartOpen(false)} />
     </main>
   )
 }

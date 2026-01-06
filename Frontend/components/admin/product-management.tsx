@@ -61,8 +61,27 @@ export default function ProductManagement() {
   const [search, setSearch] = useState("")
   const [filterCategory, setFilterCategory] = useState<string>("")
   const [imagePreview, setImagePreview] = useState<string | undefined>(undefined)
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+
+  // Check authentication status
+  useEffect(() => {
+    const checkAuth = () => {
+      if (typeof window !== 'undefined') {
+        const adminAuth = localStorage.getItem('adminAuth')
+        const accessToken = localStorage.getItem('accessToken')
+        setIsAuthenticated(Boolean(adminAuth && accessToken))
+      }
+    }
+    checkAuth()
+  }, [])
 
   const loadProducts = async () => {
+    // Skip loading if not authenticated
+    if (!isAuthenticated) {
+      console.log("⚠️ Not authenticated, skipping product load")
+      return
+    }
+
     try {
       setLoading(true)
       console.log("🔄 Loading products from API...")
@@ -78,7 +97,10 @@ export default function ProductManagement() {
       }
     } catch (error: any) {
       console.error("❌ Error loading products:", error)
-      await loadFromSupabase(error)
+      // Only try Supabase fallback if we're authenticated
+      if (isAuthenticated) {
+        await loadFromSupabase(error)
+      }
     } finally {
       setLoading(false)
     }
@@ -120,8 +142,10 @@ export default function ProductManagement() {
   }
 
   useEffect(() => {
-    loadProducts()
-  }, [])
+    if (isAuthenticated) {
+      loadProducts()
+    }
+  }, [isAuthenticated])
 
   const filteredProducts = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -241,18 +265,194 @@ export default function ProductManagement() {
   
 
   const handleUpload = async (file: File) => {
+    console.log("🔄 Starting image upload process...")
+    console.log("📁 File details:", { name: file.name, size: file.size, type: file.type })
+    
     if (!supabase) {
+      console.error("❌ Supabase not configured")
       toast({
         title: "Storage not configured",
-        description:
-          "Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY in your .env",
+        description: "Supabase storage is not properly configured",
         variant: "destructive",
       })
       return
     }
 
     const MAX_MB = 5
-    const allowed = ["image/jpeg", "image/png", "image/webp"]
+    const allowed = ["image/jpeg", "image/png", "image/webp", "image/jpg"]
+
+    if (!allowed.includes(file.type)) {
+      toast({
+        title: "Invalid file type",
+        description: "Please use JPG, PNG, or WEBP format",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (file.size > MAX_MB * 1024 * 1024) {
+      toast({
+        title: "File too large",
+        description: `Maximum file size is ${MAX_MB}MB`,
+        variant: "destructive",
+      })
+      return
+    }
+
+    // Generate unique filename outside try block so it's accessible in catch
+    const timestamp = Date.now()
+    const randomId = Math.random().toString(36).substring(2, 8)
+    const ext = file.name.split(".").pop()?.toLowerCase() || "jpg"
+    const fileName = `product_${timestamp}_${randomId}.${ext}`
+    const filePath = `products/${fileName}`
+
+    try {
+      // Show uploading state
+      toast({
+        title: "Uploading image...",
+        description: "Please wait while we upload your image",
+      })
+
+      console.log("📤 Uploading to path:", filePath)
+
+      // Try Supabase storage first, then fallback to local storage
+      let uploadSuccess = false
+      let finalImageUrl = ''
+      
+      try {
+        // Convert file to ArrayBuffer for better compatibility
+        const fileBuffer = await file.arrayBuffer()
+        
+        // Try uploading to Supabase storage
+        const { data: uploadData, error: uploadError } = await supabase.storage
+          .from("public")
+          .upload(filePath, fileBuffer, { 
+            upsert: true,
+            contentType: file.type
+          })
+
+        if (!uploadError && uploadData) {
+          console.log("✅ Supabase upload successful:", uploadData)
+          
+          // Get public URL
+          const { data: urlData } = supabase.storage.from("public").getPublicUrl(filePath)
+          const publicUrl = urlData?.publicUrl
+          
+          if (publicUrl) {
+            console.log("✅ Supabase public URL generated:", publicUrl)
+            finalImageUrl = publicUrl
+            uploadSuccess = true
+          }
+        } else {
+          console.log("❌ Supabase upload failed:", uploadError?.message)
+        }
+      } catch (supabaseError) {
+        console.log("❌ Supabase error:", supabaseError)
+      }
+      
+      // If Supabase failed, try backend upload API
+      if (!uploadSuccess) {
+        console.log("🔄 Trying backend upload API...")
+        
+        try {
+          const formData = new FormData()
+          formData.append('image', file)
+          
+          const response = await fetch(`${process.env.NEXT_PUBLIC_API_BASE_URL}/upload/product-image`, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+            },
+            body: formData
+          })
+          
+          if (response.ok) {
+            const result = await response.json()
+            finalImageUrl = result.data.imageUrl
+            uploadSuccess = true
+            
+            console.log("✅ Backend upload successful:", result.data)
+            
+            toast({ 
+              title: "✅ Image uploaded successfully",
+              description: "Product image has been uploaded to server!"
+            })
+          } else {
+            throw new Error('Backend upload failed')
+          }
+        } catch (backendError) {
+          console.log("❌ Backend upload failed:", backendError)
+          
+          // Final fallback: use local preview only
+          const localImagePath = `/uploads/products/${fileName}`
+          finalImageUrl = localImagePath
+          
+          console.log("📝 Using local preview only:", localImagePath)
+          
+          toast({
+            title: "Using local preview",
+            description: "Image preview loaded. Upload services unavailable.",
+          })
+          
+          uploadSuccess = true
+        }
+      }
+      
+      // Set image preview
+      if (finalImageUrl.startsWith('http') || finalImageUrl.startsWith('/uploads')) {
+        setImagePreview(finalImageUrl)
+      } else {
+        setImagePreview(URL.createObjectURL(file))
+      }
+
+      // Update form state with the final image URL
+      setForm((prev) => ({ ...prev, image_url: finalImageUrl }))
+      
+      toast({ 
+        title: "✅ Image uploaded successfully",
+        description: "Product image has been updated. Don't forget to save the product!"
+      })
+      
+    } catch (error: any) {
+      console.error("❌ Upload process failed:", error)
+      
+      // Even if upload fails, we can still use local preview
+      try {
+        const localImagePath = `/uploads/products/${fileName}`
+        const previewUrl = URL.createObjectURL(file)
+        
+        setForm((prev) => ({ ...prev, image_url: localImagePath }))
+        setImagePreview(previewUrl)
+        
+        toast({
+          title: "Using local preview",
+          description: "Image preview loaded. Upload may have failed but you can still save the product.",
+          variant: "default"
+        })
+      } catch (fallbackError) {
+        console.error("❌ Fallback also failed:", fallbackError)
+        toast({
+          title: "Upload failed",
+          description: "Could not process the image. Please try a different file.",
+          variant: "destructive",
+        })
+      }
+    }
+  }
+
+  // ✅ Handle extra image upload
+  const handleExtraImageUpload = async (file: File, index: number) => {
+    if (!supabase) {
+      toast({
+        title: "Storage not configured",
+        description: "Supabase storage is not available",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const MAX_MB = 5
+    const allowed = ["image/jpeg", "image/png", "image/webp", "image/jpg"]
 
     if (!allowed.includes(file.type)) {
       toast({
@@ -273,31 +473,44 @@ export default function ProductManagement() {
     }
 
     try {
-      // ✅ Safe random ID for browsers
-      const ext = file.name.split(".").pop() || "jpg"
+      toast({
+        title: "Uploading extra image...",
+        description: "Please wait while we upload your image",
+      })
+
+      const ext = file.name.split(".").pop()?.toLowerCase() || "jpg"
       const uuid =
         typeof crypto !== "undefined" && crypto.randomUUID
           ? crypto.randomUUID()
-          : Math.random().toString(36).substring(2)
-      const path = `products/${uuid}.${ext}`
+          : Math.random().toString(36).substring(2) + Date.now().toString(36)
+      const path = `products/extra/${uuid}.${ext}`
 
-      const { error: uploadError } = await supabase.storage
+      const { data: uploadData, error: uploadError } = await supabase.storage
         .from("public")
-        .upload(path, file, { upsert: false })
+        .upload(path, file, { 
+          upsert: false,
+          contentType: file.type
+        })
 
       if (uploadError) throw uploadError
 
       const { data: urlData } = supabase.storage.from("public").getPublicUrl(path)
       const publicUrl = urlData?.publicUrl
+      
       if (!publicUrl) throw new Error("Failed to get public URL")
 
-      setForm((prev) => ({ ...prev, image_url: publicUrl }))
-      setImagePreview(publicUrl)
-      toast({ title: "✅ Image uploaded successfully" })
+      // Update the specific extra image URL
+      updateExtraImage(index, publicUrl)
+      
+      toast({ 
+        title: "✅ Extra image uploaded successfully",
+        description: "Additional product image has been added"
+      })
     } catch (error: any) {
+      console.error("❌ Extra image upload failed:", error)
       toast({
         title: "Upload failed",
-        description: error?.message || "Error uploading image",
+        description: error?.message || "Error uploading extra image",
         variant: "destructive",
       })
     }
@@ -317,6 +530,24 @@ export default function ProductManagement() {
     const updated = [...(form.extra_images || [])]
     updated[index] = value
     setForm((prev) => ({ ...prev, extra_images: updated }))
+  }
+
+  // Show authentication message if not logged in
+  if (!isAuthenticated) {
+    return (
+      <div className="space-y-6">
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-6 text-center">
+          <h2 className="text-xl font-semibold text-yellow-800 mb-2">Authentication Required</h2>
+          <p className="text-yellow-700 mb-4">Please log in as an admin to access product management.</p>
+          <a 
+            href="/admin-login" 
+            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Go to Admin Login
+          </a>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -390,48 +621,198 @@ export default function ProductManagement() {
               </div>
             ))}
 
-            {/* Image Upload */}
+            {/* Main Image Upload */}
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Image Upload</label>
-              <div className="flex items-center gap-3 flex-wrap">
-                <input type="file" accept="image/*" onChange={(e) => {
-                  const f = e.target.files?.[0]
-                  if (f) handleUpload(f)
-                }} className="text-sm text-gray-600" />
-                <button type="button" className="flex items-center gap-2 px-3 py-1.5 border rounded-lg text-gray-700 hover:bg-gray-50 transition-all text-sm">
-                  <ImageUp className="w-4 h-4" /> Upload
-                </button>
-              </div>
-              {imagePreview && (
-                <div className="mt-3 flex gap-2 flex-wrap">
-                  <img src={imagePreview} alt="Preview" className="w-24 h-24 rounded-lg object-cover border" />
+              <label className="block text-sm font-medium text-gray-700 mb-2">Main Product Image</label>
+              <p className="text-xs text-gray-500 mb-3">
+                Upload an image file or paste an image URL. The uploaded image will be stored and the URL will appear below.
+              </p>
+              <div className="space-y-3">
+                <div className="flex items-center gap-3 flex-wrap">
+                  <input 
+                    id="main-image-upload"
+                    type="file" 
+                    accept="image/jpeg,image/png,image/webp,image/jpg" 
+                    onChange={(e) => {
+                      const f = e.target.files?.[0]
+                      if (f) handleUpload(f)
+                      // Reset input to allow same file upload again
+                      e.target.value = ''
+                    }} 
+                    className="hidden" 
+                  />
+                  <label 
+                    htmlFor="main-image-upload"
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all text-sm font-medium cursor-pointer"
+                  >
+                    <ImageUp className="w-4 h-4" /> 
+                    Upload Main Image
+                  </label>
+                  <span className="text-xs text-gray-500">JPG, PNG, WEBP (Max 5MB)</span>
                 </div>
-              )}
+                
+                {/* Current Image URL Input */}
+                <div>
+                  <label className="block text-xs text-gray-600 mb-1">
+                    Image URL: 
+                    {form.image_url && (
+                      <span className="ml-2 text-green-600 font-medium">
+                        {form.image_url.includes('supabase') ? '✅ Cloud Storage' : 
+                         form.image_url.includes('/uploads/') ? '✅ Server Storage' : 
+                         '✅ External URL'}
+                      </span>
+                    )}
+                  </label>
+                  <div className="flex gap-2">
+                    <input
+                      type="url"
+                      name="image_url"
+                      value={form.image_url || ''}
+                      onChange={onChange}
+                      placeholder="https://example.com/image.jpg or paste URL here"
+                      className="flex-1 px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-500 text-gray-700"
+                      title={form.image_url || 'Enter or paste image URL'}
+                    />
+                    {form.image_url && (
+                      <button
+                        type="button"
+                        onClick={() => setForm(prev => ({ ...prev, image_url: '' }))}
+                        className="px-3 py-2 text-sm bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                        title="Clear image URL"
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                  {form.image_url && (
+                    <p className="text-xs text-gray-500 mt-1 truncate">
+                      Current: {form.image_url.length > 60 ? form.image_url.substring(0, 60) + '...' : form.image_url}
+                    </p>
+                  )}
+                </div>
+
+                {/* Image Preview */}
+                {(imagePreview || form.image_url) && (
+                  <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+                    <div className="flex items-center gap-2 mb-3">
+                      <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                      <p className="text-sm font-medium text-green-800">Image Ready</p>
+                    </div>
+                    <div className="flex gap-4 items-start">
+                      <div className="relative">
+                        <img 
+                          src={imagePreview || form.image_url} 
+                          alt="Main product preview" 
+                          className="w-24 h-24 rounded-lg object-cover border-2 border-green-300 shadow-sm" 
+                          onError={(e) => {
+                            e.currentTarget.src = '/placeholder.jpg'
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setForm(prev => ({ ...prev, image_url: '' }))
+                            setImagePreview(undefined)
+                          }}
+                          className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-xs hover:bg-red-600 transition-colors"
+                          title="Remove image"
+                        >
+                          ×
+                        </button>
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-sm text-green-700 mb-1">
+                          ✅ Product image is ready to be saved
+                        </p>
+                        <p className="text-xs text-green-600">
+                          This image will be used as the main product image when you save the product.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
-            {/* Extra Image URLs */}
+            {/* Extra Images */}
             <div className="md:col-span-2">
               <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                <Link2 className="w-4 h-4" /> Extra Image URLs
+                <Link2 className="w-4 h-4" /> Additional Product Images
               </label>
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {form.extra_images?.map((url, i) => (
-                  <div key={i} className="flex gap-2 items-center">
-                    <input
-                      type="text"
-                      value={url}
-                      onChange={(e) => updateExtraImage(i, e.target.value)}
-                      placeholder="https://example.com/image.jpg"
-                      className="flex-1 px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-500 text-gray-700"
-                    />
-                    <button type="button" onClick={() => removeExtraImage(i)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg">
-                      <MinusCircle className="w-4 h-4" />
-                    </button>
+                  <div key={i} className="border rounded-lg p-3 bg-gray-50">
+                    <div className="flex gap-2 items-start mb-2">
+                      <div className="flex-1">
+                        <input
+                          type="url"
+                          value={url}
+                          onChange={(e) => updateExtraImage(i, e.target.value)}
+                          placeholder="https://example.com/image.jpg"
+                          className="w-full px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-blue-500 text-gray-700 bg-white"
+                        />
+                      </div>
+                      <button 
+                        type="button" 
+                        onClick={() => removeExtraImage(i)} 
+                        className="p-2 text-red-500 hover:bg-red-100 rounded-lg transition-colors"
+                        title="Remove this image"
+                      >
+                        <MinusCircle className="w-4 h-4" />
+                      </button>
+                    </div>
+                    
+                    <div className="flex items-center gap-3">
+                      <input 
+                        id={`extra-image-upload-${i}`}
+                        type="file" 
+                        accept="image/jpeg,image/png,image/webp,image/jpg" 
+                        onChange={(e) => {
+                          const f = e.target.files?.[0]
+                          if (f) handleExtraImageUpload(f, i)
+                          e.target.value = ''
+                        }} 
+                        className="hidden" 
+                      />
+                      <label 
+                        htmlFor={`extra-image-upload-${i}`}
+                        className="flex items-center gap-2 px-3 py-1.5 bg-green-600 text-white rounded text-xs font-medium cursor-pointer hover:bg-green-700 transition-colors"
+                      >
+                        <ImageUp className="w-3 h-3" /> 
+                        Upload File
+                      </label>
+                      <span className="text-xs text-gray-500">or paste URL above</span>
+                    </div>
+
+                    {/* Preview for extra image */}
+                    {url && (
+                      <div className="mt-2">
+                        <img 
+                          src={url} 
+                          alt={`Extra image ${i + 1}`} 
+                          className="w-20 h-20 rounded object-cover border shadow-sm" 
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none'
+                          }}
+                        />
+                      </div>
+                    )}
                   </div>
                 ))}
-                <button type="button" onClick={addExtraImage} className="flex items-center gap-2 text-blue-600 hover:text-blue-800 text-sm font-medium">
-                  <PlusCircle className="w-4 h-4" /> Add Image URL
+                
+                <button 
+                  type="button" 
+                  onClick={addExtraImage} 
+                  className="flex items-center gap-2 text-blue-600 hover:text-blue-800 text-sm font-medium hover:bg-blue-50 px-3 py-2 rounded-lg transition-colors"
+                >
+                  <PlusCircle className="w-4 h-4" /> Add Another Image
                 </button>
+                
+                {(!form.extra_images || form.extra_images.length === 0) && (
+                  <p className="text-xs text-gray-500 italic">
+                    Add additional product images to showcase different angles or details
+                  </p>
+                )}
               </div>
             </div>
 

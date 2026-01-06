@@ -29,7 +29,7 @@ export const sendOtp = createAsyncThunk(
   async (email: string, { rejectWithValue }) => {
     try {
       const response = await authApi.sendOtp(email)
-      return { email, ...response.data }
+      return { email, expiresIn: response.data.expiresIn }
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.message || 'Failed to send OTP')
     }
@@ -125,6 +125,11 @@ const userSlice = createSlice({
       localStorage.removeItem('refreshToken')
       localStorage.removeItem('user')
       localStorage.removeItem('otpEmail')
+      
+      // Dispatch auth change event
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new Event('authStateChanged'))
+      }
     },
     updateUser: (state, action: PayloadAction<Partial<User>>) => {
       if (state.user) {
@@ -190,6 +195,11 @@ const userSlice = createSlice({
         state.refreshToken = action.payload.refreshToken
         state.otpSent = false
         state.error = null
+        
+        // Dispatch auth change event
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new Event('authStateChanged'))
+        }
       })
       .addCase(verifyOtp.rejected, (state, action) => {
         state.loading = false

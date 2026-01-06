@@ -1,6 +1,7 @@
-import { useSelector, useDispatch } from 'react-redux';
+import { useSelector } from 'react-redux';
 import { useCallback } from 'react';
 import { RootState } from '../../store/store';
+import { useAppDispatch } from '../../hooks/use-app-dispatch';
 import {
   sendOtp,
   verifyOtp,
@@ -13,7 +14,7 @@ import {
 import { isTokenExpired } from '../utils/tokenUtils';
 
 export const useAuth = () => {
-  const dispatch = useDispatch();
+  const dispatch = useAppDispatch();
   const { 
     isAuthenticated, 
     user, 

@@ -60,3 +60,7 @@ INSERT INTO products (name, description, price, image_url, stock, category, disc
 
 
 
+
+
+
+

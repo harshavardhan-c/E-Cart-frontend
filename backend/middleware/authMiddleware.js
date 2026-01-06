@@ -85,31 +85,36 @@ export const optionalAuth = async (req, res, next) => {
     const token = authHeader && authHeader.split(' ')[1];
 
     if (token) {
-      const decoded = verifyToken(token);
+      try {
+        const decoded = verifyToken(token);
 
-      if (decoded.email === 'admin@lalithamegamall.com') {
-        req.user = {
-          id: decoded.id || 'admin001',
-          email: decoded.email,
-          name: decoded.name || 'Admin',
-          role: 'admin',
-        };
-        return next();
-      }
+        if (decoded.email === 'admin@lalithamegamall.com') {
+          req.user = {
+            id: decoded.id || 'admin001',
+            email: decoded.email,
+            name: decoded.name || 'Admin',
+            role: 'admin',
+          };
+          return next();
+        }
 
-      const { data: user, error } = await supabase
-        .from('users')
-        .select('id, email, name, role, created_at')
-        .eq('id', decoded.id)
-        .single();
+        const { data: user, error } = await supabase
+          .from('users')
+          .select('id, email, name, role, created_at')
+          .eq('id', decoded.id)
+          .single();
 
-      if (!error && user) {
-        req.user = user;
+        if (!error && user) {
+          req.user = user;
+        }
+      } catch (tokenError) {
+        // Token is invalid, continue as guest
       }
     }
 
     next();
-  } catch {
+  } catch (error) {
+    console.log('🔍 DEBUG: optionalAuth caught error, continuing as guest:', error.message);
     // Continue without authentication
     next();
   }

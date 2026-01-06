@@ -1,10 +1,19 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
   images: {
-    remotePatterns: [],
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '**',
+      },
+      {
+        protocol: 'http',
+        hostname: 'localhost',
+      },
+    ],
     formats: ["image/avif", "image/webp"],
     unoptimized: true,
   },
@@ -15,6 +24,8 @@ const nextConfig = {
     esmExternals: true,
   },
   outputFileTracingRoot: process.cwd(),
+  // Empty turbopack config to silence the warning
+  turbopack: {},
 }
 
 export default nextConfig

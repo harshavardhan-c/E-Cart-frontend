@@ -4,12 +4,10 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useSelector } from "react-redux"
 import { RootState } from "@/store/store"
-import { fetchCart, removeFromCart, updateCartItem, clearCart } from "@/store/slices/cartSlice"
-import { createOrderThunk } from "@/store/slices/orderSlice"
 import { validateCoupon } from "@/store/slices/couponSlice"
 import { useAuthContext } from "../../src/context/AuthProvider"
 import { useAppDispatch } from "@/hooks/use-app-dispatch"
-import ProtectedRoute from "@/components/protected-route"
+import { useCart } from "@/hooks/use-cart"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -17,12 +15,26 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Trash2, Plus, Minus, ShoppingBag, CreditCard } from "lucide-react"
 import { motion } from "framer-motion"
 
+interface CartItem {
+  id: string
+  quantity: number
+  products?: {
+    id: string
+    name: string
+    price: string
+    category?: string
+    image_url?: string
+    discount_percent?: number
+  }
+}
+
 export default function CartPage() {
   const router = useRouter()
   const dispatch = useAppDispatch()
   const { user } = useAuthContext()
   
-  const { items: cartItems, total, loading: cartLoading } = useSelector((state: RootState) => state.cart)
+  // Use the useCart hook instead of direct Redux state
+  const { cart: cartItems, total, removeFromCart: handleRemoveFromCart, updateQuantity } = useCart()
   const { loading: orderLoading, error: orderError } = useSelector((state: RootState) => state.orders)
   const { validationResult, loading: couponLoading } = useSelector((state: RootState) => state.coupons)
   
@@ -32,11 +44,12 @@ export default function CartPage() {
   const [discountAmount, setDiscountAmount] = useState(0)
   const [finalTotal, setFinalTotal] = useState(total)
 
-  useEffect(() => {
-    if (user?.id) {
-      dispatch(fetchCart())
-    }
-  }, [dispatch, user?.id])
+  // Remove the manual fetchCart effect since useCart hook handles this
+  // useEffect(() => {
+  //   if (user?.id) {
+  //     dispatch(fetchCart())
+  //   }
+  // }, [dispatch, user?.id])
 
   useEffect(() => {
     setFinalTotal(total - discountAmount)
@@ -44,16 +57,14 @@ export default function CartPage() {
 
   const handleQuantityChange = async (cartId: string, newQuantity: number) => {
     if (newQuantity <= 0) {
-      await dispatch(removeFromCart(cartId))
+      await handleRemoveFromCart(cartId)
     } else {
-      await dispatch(updateCartItem({ cartId, quantity: newQuantity }))
+      await updateQuantity(cartId, newQuantity)
     }
-    dispatch(fetchCart()) // Refresh cart
   }
 
   const handleRemoveItem = async (cartId: string) => {
-    await dispatch(removeFromCart(cartId))
-    dispatch(fetchCart()) // Refresh cart
+    await handleRemoveFromCart(cartId)
   }
 
   const handleApplyCoupon = async () => {
@@ -94,10 +105,9 @@ export default function CartPage() {
   }
 
   return (
-    <ProtectedRoute>
-      <div className="min-h-screen bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-8">Shopping Cart</h1>
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <h1 className="text-3xl font-bold text-gray-900 mb-8">Shopping Cart</h1>
           
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* Cart Items */}
@@ -107,11 +117,18 @@ export default function CartPage() {
                   <CardTitle>Cart Items ({cartItems.length})</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  {cartItems.map((item, index) => {
-                    const product = item.products || {}
-                    const price = product.discount_percent > 0 
+                  {cartItems.map((item: CartItem, index: number) => {
+                    const product = item.products || {
+                      id: '',
+                      name: 'Unknown Product',
+                      price: '0',
+                      category: '',
+                      image_url: '',
+                      discount_percent: 0
+                    }
+                    const price = product.discount_percent && product.discount_percent > 0 
                       ? parseFloat((parseFloat(product.price) * (1 - product.discount_percent / 100)).toFixed(2))
-                      : parseFloat(product.price || '0')
+                      : parseFloat(product.price)
                     
                     return (
                       <motion.div
@@ -258,10 +275,9 @@ export default function CartPage() {
                 </CardContent>
               </Card>
             </div>
-          </div>
         </div>
       </div>
-    </ProtectedRoute>
+    </div>
   )
 }
 

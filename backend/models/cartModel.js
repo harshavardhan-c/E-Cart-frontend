@@ -6,10 +6,10 @@ import { supabase } from '../config/supabaseClient.js';
 export class CartModel {
   /**
    * Get user's cart items
-   * @param {string} customerId - Customer ID
+   * @param {string} userId - User ID (stored as customer_id in cart table)
    * @returns {Promise<Array>} Cart items with product details
    */
-  static async getCartByCustomerId(customerId) {
+  static async getCartByCustomerId(userId) {
     try {
       const { data, error } = await supabase
         .from('cart')
@@ -17,12 +17,13 @@ export class CartModel {
           *,
           products (*)
         `)
-        .eq('customer_id', customerId)
+        .eq('customer_id', userId)
         .order('added_at', { ascending: false });
 
       if (error) throw error;
       return data || [];
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('❌ Error getting cart:', error.message);
       throw error;
     }
@@ -30,18 +31,18 @@ export class CartModel {
 
   /**
    * Add item to cart
-   * @param {string} customerId - Customer ID
+   * @param {string} userId - User ID
    * @param {string} productId - Product ID
    * @param {number} quantity - Quantity to add
    * @returns {Promise<Object>} Cart item
    */
-  static async addToCart(customerId, productId, quantity = 1) {
+  static async addToCart(userId, productId, quantity = 1) {
     try {
       // Check if item already exists in cart
       const { data: existing } = await supabase
         .from('cart')
         .select('*')
-        .eq('customer_id', customerId)
+        .eq('customer_id', userId)
         .eq('product_id', productId)
         .single();
 
@@ -63,7 +64,7 @@ export class CartModel {
       const { data, error } = await supabase
         .from('cart')
         .insert({
-          customer_id: customerId,
+          customer_id: userId,
           product_id: productId,
           quantity: quantity
         })
@@ -73,6 +74,7 @@ export class CartModel {
       if (error) throw error;
       return data;
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('❌ Error adding to cart:', error.message);
       throw error;
     }
@@ -96,6 +98,7 @@ export class CartModel {
       if (error) throw error;
       return data;
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('❌ Error updating cart:', error.message);
       throw error;
     }
@@ -116,6 +119,7 @@ export class CartModel {
       if (error) throw error;
       return true;
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('❌ Error removing from cart:', error.message);
       throw error;
     }
@@ -123,19 +127,20 @@ export class CartModel {
 
   /**
    * Clear entire cart
-   * @param {string} customerId - Customer ID
+   * @param {string} userId - User ID
    * @returns {Promise<boolean>} Success status
    */
-  static async clearCart(customerId) {
+  static async clearCart(userId) {
     try {
       const { error } = await supabase
         .from('cart')
         .delete()
-        .eq('customer_id', customerId);
+        .eq('customer_id', userId);
 
       if (error) throw error;
       return true;
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('❌ Error clearing cart:', error.message);
       throw error;
     }
@@ -143,23 +148,26 @@ export class CartModel {
 
   /**
    * Get cart total
-   * @param {string} customerId - Customer ID
+   * @param {string} userId - User ID
    * @returns {Promise<number>} Total amount
    */
-  static async getCartTotal(customerId) {
+  static async getCartTotal(userId) {
     try {
-      const cartItems = await this.getCartByCustomerId(customerId);
+      const cartItems = await this.getCartByCustomerId(userId);
       
       const total = cartItems.reduce((sum, item) => {
         const product = item.products;
-        const price = product.discount_percent > 0 
-          ? product.price * (1 - product.discount_percent / 100)
+        // Handle both discount and discount_percent fields for compatibility
+        const discountPercent = product.discount_percent || product.discount || 0;
+        const price = discountPercent > 0 
+          ? product.price * (1 - discountPercent / 100)
           : product.price;
         return sum + (price * item.quantity);
       }, 0);
 
       return parseFloat(total.toFixed(2));
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.error('❌ Error calculating cart total:', error.message);
       throw error;
     }
@@ -167,15 +175,15 @@ export class CartModel {
 
   /**
    * Get cart count
-   * @param {string} customerId - Customer ID
+   * @param {string} userId - User ID
    * @returns {Promise<number>} Total items count
    */
-  static async getCartCount(customerId) {
+  static async getCartCount(userId) {
     try {
       const { count, error } = await supabase
         .from('cart')
         .select('*', { count: 'exact', head: true })
-        .eq('customer_id', customerId);
+        .eq('customer_id', userId);
 
       if (error) throw error;
       return count || 0;
@@ -187,6 +195,9 @@ export class CartModel {
 }
 
 export default CartModel;
+
+
+
 
 
 

@@ -11,11 +11,19 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 
+interface Coupon {
+  id: string
+  code: string
+  discount: number
+  expiryDate: string
+  maxUses: number
+  currentUses: number
+}
+
 export default function CouponManagement() {
   const coupons = useAppSelector((state) => state.admin.coupons)
   const dispatch = useDispatch()
   const [showAddForm, setShowAddForm] = useState(false)
-  const [editingId, setEditingId] = useState<string | null>(null)
   const [formData, setFormData] = useState({
     code: "",
     discount: 0,
@@ -36,7 +44,7 @@ export default function CouponManagement() {
     }
 
     const newCoupon = {
-      id: Math.random().toString(36).substr(2, 9),
+      id: Math.random().toString(36).substring(2, 11),
       code: formData.code,
       discount: Number(formData.discount),
       expiryDate: formData.expiryDate,
@@ -152,7 +160,7 @@ export default function CouponManagement() {
                     </td>
                   </tr>
                 ) : (
-                  coupons.map((coupon) => (
+                  coupons.map((coupon: Coupon) => (
                     <tr key={coupon.id} className="border-b border-gray-200 hover:bg-gray-50">
                       <td className="py-3 px-4 font-semibold text-gray-900">{coupon.code}</td>
                       <td className="py-3 px-4 text-gray-600">{coupon.discount}%</td>

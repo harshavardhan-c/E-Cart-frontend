@@ -1,7 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useEffect, useMemo, useRef, useCallback } from "react"
 import { useAppDispatch } from "@/hooks/use-app-dispatch"
 import { useAppSelector } from "@/hooks/use-app-selector"
 import { useToast } from "@/hooks/use-toast"
@@ -11,93 +10,83 @@ import {
   updateCartItem, 
   removeFromCart, 
   clearCart,
-  resetCart
+  syncGuestCartOnLogin
 } from "@/store/slices/cartSlice"
-// We no longer depend on Supabase auth for cart logic; use JWT/user slice
+import { cartApi } from "@/src/api/cartApi"
 
 export function useCart() {
-  const router = useRouter()
   const dispatch = useAppDispatch()
   const { toast } = useToast()
-  const [guestItems, setGuestItems] = useState<any[]>([])
-  const [guestCount, setGuestCount] = useState(0)
-  const [guestTotal, setGuestTotal] = useState(0)
+  
+  // Single source of truth: Redux user state
+  const isAuthenticated = useAppSelector((state) => state.user.isAuthenticated)
   
   // Get cart state from Redux
-  const { items, total, itemCount, loading, error, isAuthenticated } = useAppSelector(
+  const { items, total, itemCount, loading, error } = useAppSelector(
     (state) => state.cart
   )
 
-  const readGuestCart = (): any[] => {
+  // Track if cart has been fetched for current auth state
+  const hasFetchedCart = useRef(false)
+  const lastAuthState = useRef(isAuthenticated)
+
+  // Initialize cart on mount and when auth state changes
+  useEffect(() => {
+    // If auth state changed, reset fetch flag
+    if (lastAuthState.current !== isAuthenticated) {
+      hasFetchedCart.current = false
+      lastAuthState.current = isAuthenticated
+    }
+
+    // Skip if already fetched for this auth state
+    if (hasFetchedCart.current) {
+      return
+    }
+
+    hasFetchedCart.current = true
+
+    if (isAuthenticated) {
+      // Authenticated user - sync guest cart if exists, otherwise just fetch
+      const guestItems = cartApi.readGuest()
+      if (guestItems.length > 0) {
+        // syncGuestCartOnLogin already fetches the cart after syncing
+        dispatch(syncGuestCartOnLogin())
+      } else {
+        dispatch(fetchCart())
+      }
+    } else {
+      // Guest user - load from localStorage via fetchCart thunk
+      dispatch(fetchCart())
+    }
+  }, [isAuthenticated, dispatch])
+
+  // Helper functions for guest cart operations
+  const readGuestCart = useCallback((): any[] => {
     if (typeof window === 'undefined') return []
     try {
       const raw = localStorage.getItem('guestCart')
       return raw ? JSON.parse(raw) : []
-    } catch {
+    } catch (error) {
       return []
     }
-  }
+  }, [])
 
-  const writeGuestCart = (items: any[]) => {
+  const writeGuestCart = useCallback((items: any[]) => {
     if (typeof window === 'undefined') return
     localStorage.setItem('guestCart', JSON.stringify(items))
-  }
-
-  const recalcGuest = (items: any[]) => {
-    setGuestItems(items)
-    setGuestCount(items.reduce((n, it) => n + (it.quantity || 1), 0))
-    setGuestTotal(items.reduce((sum, it) => sum + (it.products?.price || 0) * (it.quantity || 1), 0))
-  }
-
-  // Fetch cart on mount and when auth changes
-  useEffect(() => {
-    // Determine auth by presence of accessToken in localStorage (aligned with backend)
-    const hasJwt = typeof window !== 'undefined' && !!localStorage.getItem('accessToken')
-    if (hasJwt) {
-      dispatch(fetchCart())
-    } else {
-      dispatch(resetCart())
-      const items = readGuestCart()
-      recalcGuest(items)
-    }
-
-    // Sync guest cart across components/tabs
-    const handleStorage = (e: StorageEvent) => {
-      if (!e.key || e.key === 'guestCart') {
-        const items = readGuestCart()
-        recalcGuest(items)
-      }
-    }
-    const handleGuestCartUpdated = () => {
-      const items = readGuestCart()
-      recalcGuest(items)
-    }
-
-    if (typeof window !== 'undefined') {
-      window.addEventListener('storage', handleStorage)
-      window.addEventListener('guestCartUpdated', handleGuestCartUpdated as EventListener)
-    }
-
-    return () => {
-      if (typeof window !== 'undefined') {
-        window.removeEventListener('storage', handleStorage)
-        window.removeEventListener('guestCartUpdated', handleGuestCartUpdated as EventListener)
-      }
-    }
-  }, [dispatch])
+  }, [])
 
   /**
    * Add product to cart
-   * Requires authentication
+   * Supports both authenticated and guest users
    */
-  const handleAddToCart = async (product: any) => {
+  const handleAddToCart = useCallback(async (product: any) => {
     try {
-      // Check if user is authenticated via JWT
-      const hasJwt = typeof window !== 'undefined' && !!localStorage.getItem('accessToken')
-      if (!hasJwt) {
-        // Guest path: write to localStorage immediately (no reload, instant UI)
+      if (!isAuthenticated) {
+        // Guest path: write to localStorage and update Redux
         const items = readGuestCart()
         const idx = items.findIndex((it: any) => (it.product_id || it.id) === product.id)
+        
         if (idx >= 0) {
           items[idx].quantity = (items[idx].quantity || 1) + 1
         } else {
@@ -105,7 +94,6 @@ export function useCart() {
             id: product.id,
             product_id: product.id,
             quantity: 1,
-            // embed essential product fields for UI
             products: {
               id: product.id,
               name: product.name,
@@ -115,91 +103,75 @@ export function useCart() {
             }
           })
         }
+        
         writeGuestCart(items)
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new Event('guestCartUpdated'))
-        }
-        recalcGuest(items)
-        toast({ title: "Item added to cart", description: `${product.name} has been added to your cart` })
+        // Refresh cart from Redux (fetchCart reads guest cart)
+        await dispatch(fetchCart())
+        
+        toast({ 
+          title: "Item added to cart", 
+          description: `${product.name} has been added to your cart` 
+        })
         return
       }
 
-      // Dispatch add to cart action
+      // Authenticated path: use Redux thunk
       const result = await dispatch(addToCart({ 
         productId: product.id, 
         quantity: 1 
       }))
 
       if (addToCart.fulfilled.match(result)) {
-        // Fetch cart to get updated state
-        dispatch(fetchCart())
-        
+        // Refetch cart to get updated state - await to ensure it completes
+        await dispatch(fetchCart())
         toast({
           title: "Item added to cart",
           description: `${product.name} has been added to your cart`,
         })
       } else if (addToCart.rejected.match(result)) {
         const errorMsg = result.payload as string
-        
-        // Handle authentication error specially
-        if (errorMsg === 'USER_NOT_AUTHENTICATED') {
-          toast({
-            title: "Please login to continue shopping",
-            description: "You need to login to add items to your cart",
-            variant: "destructive"
-          })
-          
-          const currentPath = window.location.pathname
-          setTimeout(() => {
-            router.push(`/login?redirect=${currentPath}`)
-          }, 500)
-        } else {
-          toast({
-            title: "Error",
-            description: errorMsg,
-            variant: "destructive"
-          })
-        }
+        toast({
+          title: "Error adding to cart",
+          description: errorMsg || "Failed to add item to cart",
+          variant: "destructive"
+        })
       }
     } catch (error: any) {
-      console.error('Error adding to cart:', error)
-      
-      // Check for authentication errors
-      if (error.message?.includes('not authenticated') || error.message?.includes('USER_NOT_AUTHENTICATED')) {
-        toast({
-          title: "Please login to continue shopping",
-          description: "You need to login to add items to your cart",
-          variant: "destructive"
-        })
-        
-        const currentPath = window.location.pathname
-        setTimeout(() => {
-          router.push(`/login?redirect=${currentPath}`)
-        }, 500)
-      } else {
-        toast({
-          title: "Error",
-          description: error.message || "Failed to add to cart",
-          variant: "destructive"
-        })
-      }
+      toast({
+        title: "Error",
+        description: error.message || "Failed to add to cart",
+        variant: "destructive"
+      })
     }
-  }
+  }, [isAuthenticated, readGuestCart, writeGuestCart, dispatch, toast])
 
   /**
    * Update quantity
    */
-  const handleUpdateQuantity = async (cartId: string, quantity: number) => {
+  const handleUpdateQuantity = useCallback(async (cartId: string, quantity: number) => {
     if (quantity <= 0) {
       await handleRemoveFromCart(cartId)
       return
     }
 
     try {
+      if (!isAuthenticated) {
+        // Guest path: update localStorage
+        const items = readGuestCart()
+        const idx = items.findIndex((it: any) => it.id === cartId)
+        if (idx >= 0) {
+          items[idx].quantity = quantity
+          writeGuestCart(items)
+          await dispatch(fetchCart())
+        }
+        return
+      }
+
       const result = await dispatch(updateCartItem({ cartId, quantity }))
       
       if (updateCartItem.fulfilled.match(result)) {
-        dispatch(fetchCart()) // Refresh cart
+        // Refetch cart to get updated state
+        await dispatch(fetchCart())
       } else if (updateCartItem.rejected.match(result)) {
         toast({
           title: "Error",
@@ -208,20 +180,36 @@ export function useCart() {
         })
       }
     } catch (error: any) {
-      console.error('Error updating quantity:', error)
+      toast({
+        title: "Error",
+        description: "Failed to update quantity",
+        variant: "destructive"
+      })
     }
-  }
+  }, [isAuthenticated, readGuestCart, writeGuestCart, dispatch, toast])
 
   /**
    * Remove item from cart
    */
-  const handleRemoveFromCart = async (cartId: string) => {
+  const handleRemoveFromCart = useCallback(async (cartId: string) => {
     try {
+      if (!isAuthenticated) {
+        // Guest path: remove from localStorage
+        const items = readGuestCart()
+        const filtered = items.filter((it: any) => it.id !== cartId)
+        writeGuestCart(filtered)
+        await dispatch(fetchCart())
+        toast({
+          title: "Item removed",
+          description: "Item has been removed from your cart",
+        })
+        return
+      }
+
       const result = await dispatch(removeFromCart(cartId))
       
       if (removeFromCart.fulfilled.match(result)) {
-        dispatch(fetchCart()) // Refresh cart
-        
+        // State is already updated by the reducer, no need to refetch
         toast({
           title: "Item removed",
           description: "Item has been removed from your cart",
@@ -234,41 +222,54 @@ export function useCart() {
         })
       }
     } catch (error: any) {
-      console.error('Error removing from cart:', error)
+      toast({
+        title: "Error",
+        description: "Failed to remove item",
+        variant: "destructive"
+      })
     }
-  }
-
-  /**
-   * Get total amount
-   */
-  const getTotal = () => {
-    return total
-  }
+  }, [isAuthenticated, readGuestCart, writeGuestCart, dispatch, toast])
 
   /**
    * Clear entire cart
    */
-  const handleClearCart = async () => {
+  const handleClearCart = useCallback(async () => {
     try {
+      if (!isAuthenticated) {
+        // Guest user - clear localStorage
+        writeGuestCart([])
+        await dispatch(fetchCart())
+        toast({
+          title: "Cart cleared",
+          description: "Your cart has been cleared",
+        })
+        return
+      }
+
+      // Authenticated user - use Redux
       const result = await dispatch(clearCart())
       
       if (clearCart.fulfilled.match(result)) {
-        dispatch(fetchCart())
-        
+        // State is already updated by the reducer, no need to refetch
         toast({
           title: "Cart cleared",
           description: "Your cart has been cleared",
         })
       }
     } catch (error: any) {
-      console.error('Error clearing cart:', error)
+      toast({
+        title: "Error",
+        description: "Failed to clear cart",
+        variant: "destructive"
+      })
     }
-  }
+  }, [isAuthenticated, writeGuestCart, dispatch, toast])
 
-  return {
-    cart: isAuthenticated ? items : guestItems,
-    cartCount: isAuthenticated ? itemCount : guestCount,
-    total: isAuthenticated ? getTotal() : guestTotal,
+  // Memoize return value to prevent unnecessary re-renders
+  const returnValue = useMemo(() => ({
+    cart: items,
+    cartCount: itemCount,
+    total,
     loading,
     error,
     isAuthenticated,
@@ -276,5 +277,7 @@ export function useCart() {
     updateQuantity: handleUpdateQuantity,
     removeFromCart: handleRemoveFromCart,
     clearCart: handleClearCart,
-  }
+  }), [items, itemCount, total, loading, error, isAuthenticated, handleAddToCart, handleUpdateQuantity, handleRemoveFromCart, handleClearCart])
+  
+  return returnValue
 }

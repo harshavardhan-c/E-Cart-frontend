@@ -23,7 +23,9 @@ const nextConfig = {
   experimental: {
     esmExternals: true,
   },
-  outputFileTracingRoot: process.cwd(),
+  // Vercel specific configurations
+  trailingSlash: false,
+  skipTrailingSlashRedirect: true,
   // Empty turbopack config to silence the warning
   turbopack: {},
 }

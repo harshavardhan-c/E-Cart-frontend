@@ -40,7 +40,7 @@ export const fetchProductById = createAsyncThunk(
   'products/fetchById',
   async ({ category, id }: { category: string; id: string }, { rejectWithValue }) => {
     try {
-      const response = await productsApi.getProductById(category, id)
+      const response = await productsApi.getProductById(id)
       return response.data.product
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.message || 'Failed to fetch product')
@@ -76,7 +76,9 @@ export const createProduct = createAsyncThunk(
   'products/create',
   async ({ category, productData }: { category: string; productData: Partial<Product> }, { rejectWithValue }) => {
     try {
-      const response = await productsApi.createProduct(category, productData)
+      // Add category to productData since the API expects a single object
+      const productWithCategory = { ...productData, category }
+      const response = await productsApi.createProduct(productWithCategory)
       return response.data.product
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.message || 'Failed to create product')
@@ -88,7 +90,9 @@ export const updateProduct = createAsyncThunk(
   'products/update',
   async ({ category, id, updateData }: { category: string; id: string; updateData: Partial<Product> }, { rejectWithValue }) => {
     try {
-      const response = await productsApi.updateProduct(category, id, updateData)
+      // Add category to updateData if needed, but API only expects id and updateData
+      const updateWithCategory = { ...updateData, category }
+      const response = await productsApi.updateProduct(id, updateWithCategory)
       return response.data.product
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.message || 'Failed to update product')
@@ -100,7 +104,7 @@ export const deleteProduct = createAsyncThunk(
   'products/delete',
   async ({ category, id }: { category: string; id: string }, { rejectWithValue }) => {
     try {
-      await productsApi.deleteProduct(category, id)
+      await productsApi.deleteProduct(id)
       return id
     } catch (error: any) {
       return rejectWithValue(error.response?.data?.message || 'Failed to delete product')

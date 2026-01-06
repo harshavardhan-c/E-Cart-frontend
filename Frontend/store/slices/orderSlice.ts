@@ -11,6 +11,15 @@ export interface Order {
   razorpay_order_id?: string;
   razorpay_payment_id?: string;
   created_at: string;
+  order_items?: Array<{
+    id: string;
+    quantity: number;
+    price: number;
+    products?: {
+      name: string;
+      id: string;
+    };
+  }>;
 }
 
 export interface CreateOrderRequest {

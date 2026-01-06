@@ -2,7 +2,7 @@
 
 import { useEffect } from "react"
 import { useSelector, useDispatch } from "react-redux"
-import { RootState } from "@/store/store"
+import { RootState, AppDispatch } from "@/store/store"
 import { fetchUserOrders } from "@/store/slices/orderSlice"
 import { useAuthContext } from "../../src/context/AuthProvider"
 import ProtectedRoute from "@/components/protected-route"
@@ -13,7 +13,7 @@ import { Package, Calendar, MapPin, Truck } from "lucide-react"
 import { motion } from "framer-motion"
 
 export default function OrdersPage() {
-  const dispatch = useDispatch()
+  const dispatch = useDispatch<AppDispatch>()
   const { user } = useAuthContext()
   
   const { orders, loading, error } = useSelector((state: RootState) => state.orders)
@@ -173,7 +173,7 @@ export default function OrdersPage() {
                         <div className="pt-4 border-t">
                           <div className="flex justify-between items-center">
                             <span className="text-lg font-semibold">Total Amount</span>
-                            <span className="text-xl font-bold text-orange-600">₹{parseFloat(order.total_amount).toFixed(2)}</span>
+                            <span className="text-xl font-bold text-orange-600">₹{Number(order.total_amount).toFixed(2)}</span>
                           </div>
                         </div>
                       </div>

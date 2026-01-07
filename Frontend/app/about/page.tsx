@@ -4,8 +4,22 @@ import Navbar from "@/components/navbar"
 import Footer from "@/components/footer"
 import { Card, CardContent } from "@/components/ui/card"
 import { Award, Users, Truck, Heart } from "lucide-react"
+import { useEffect } from "react"
 
 export default function AboutPage() {
+  // Set document title for SEO since metadata can't be exported from client components
+  useEffect(() => {
+    document.title = "About Us - Lalitha Mega Mall"
+    const metaDescription = document.querySelector('meta[name="description"]')
+    if (metaDescription) {
+      metaDescription.setAttribute('content', 'Learn about Lalitha Mega Mall - Your trusted online destination for quality groceries and household items in Tadipatri.')
+    } else {
+      const meta = document.createElement('meta')
+      meta.name = 'description'
+      meta.content = 'Learn about Lalitha Mega Mall - Your trusted online destination for quality groceries and household items in Tadipatri.'
+      document.head.appendChild(meta)
+    }
+  }, [])
   return (
     <div className="min-h-screen bg-white">
       <Navbar cartCount={0} onCartClickAction={() => {}} />

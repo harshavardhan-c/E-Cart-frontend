@@ -4,7 +4,7 @@ import type React from "react"
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { useDispatch, useSelector } from "react-redux"
+import { useSelector } from "react-redux"
 import { RootState } from "@/store/store"
 import { createOrderThunk, updateOrderStatus } from "@/store/slices/orderSlice"
 import Navbar from "@/components/navbar"

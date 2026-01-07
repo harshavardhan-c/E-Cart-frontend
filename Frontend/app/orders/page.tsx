@@ -1,8 +1,9 @@
 "use client"
 
 import { useEffect } from "react"
-import { useSelector, useDispatch } from "react-redux"
-import { RootState, AppDispatch } from "@/store/store"
+import { useSelector } from "react-redux"
+import { RootState } from "@/store/store"
+import { useAppDispatch } from "@/hooks/use-app-dispatch"
 import { fetchUserOrders } from "@/store/slices/orderSlice"
 import { useAuthContext } from "../../src/context/AuthProvider"
 import ProtectedRoute from "@/components/protected-route"
@@ -13,7 +14,7 @@ import { Package, Calendar, MapPin, Truck } from "lucide-react"
 import { motion } from "framer-motion"
 
 export default function OrdersPage() {
-  const dispatch = useDispatch<AppDispatch>()
+  const dispatch = useAppDispatch()
   const { user } = useAuthContext()
   
   const { orders, loading, error } = useSelector((state: RootState) => state.orders)
@@ -135,8 +136,8 @@ export default function OrdersPage() {
                         <div>
                           <h4 className="font-medium text-gray-900 mb-2">Items</h4>
                           <div className="space-y-2">
-                            {order.order_items && order.order_items.length > 0 ? (
-                              order.order_items.map((item: any, itemIndex: number) => (
+                            {order?.order_items && order?.order_items.length > 0 ? (
+                              order?.order_items.map((item: any, itemIndex: number) => (
                                 <div key={itemIndex} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-b-0">
                                   <div>
                                     <p className="font-medium">{item.products?.name || 'Unknown Product'}</p>

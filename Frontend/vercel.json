@@ -1,0 +1,7 @@
+{
+  "env": {
+    "NEXT_PUBLIC_API_BASE_URL": "https://e-cart-ws8c.onrender.com/api",
+    "NEXT_PUBLIC_SUPABASE_URL": "https://bniqkmttkhzmfgyqkkoa.supabase.co",
+    "NEXT_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJuaXFrbXR0a2h6bWZneXFra29hIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjEyMTY1MzYsImV4cCI6MjA3Njc5MjUzNn0.f6Lzj5ulRXWH5BTh4wFh57Gv3582FGKAvYqpoPCRTqU"
+  }
+}
